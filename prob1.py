@@ -138,20 +138,3 @@ def MazeReverseDelete(M, N, seed=313):
              Maze[tuple(np.array(u) + np.array(v))] = 0
              frames.append(Maze.copy())
     return A,Maze,frames
-
-
-
-m,n = 60,80
-T, M, frames = MazeReverseDelete(m, n, seed=1234)#MazeKruskals(m, n, seed=1234)
-
-
-
-plt.imshow(M, cmap='gray')
-plt.show()
-
-T, M, frames = MazeKruskals(m, n, seed=1234)#MazeKruskals(m, n, seed=1234)
-
-
-
-plt.imshow(M, cmap='gray')
-plt.show()
