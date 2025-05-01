@@ -2,6 +2,20 @@
 import numpy as np
 import random
 import matplotlib.pyplot as plt
+from scipy.ndimage import zoom
+import imageio
+
+def guardar_gif(frames, nombre="dfs_laberinto.gif", duracion=0.05, escala=5):
+    """
+    Guarda un GIF ampliando la resolución por un factor 'escala'.
+
+    :param frames: lista de imágenes (arrays numpy RGB)
+    :param nombre: nombre del archivo GIF a guardar
+    :param duracion: duración de cada frame en segundos
+    :param escala: factor de ampliación (por ejemplo 5 para quintuplicar)
+    """
+    frames_grandes = [zoom(frame, (escala, escala, 1), order=0) for frame in frames]
+    imageio.mimsave(nombre, frames_grandes, duration=duracion)
 
 
 def find(a, L):
