@@ -1,80 +1,146 @@
-from prob1 import MazeKruskals  # Importar la función
-import matplotlib.pyplot as plt
+import random
+import time
+import heapq
 import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
-def visitables(Maze, nodoa, nodop):
-    L, C = Maze.shape
-
-    T = np.array([[ 0, 1],
-                  [-1, 0]])
-
-    nodop = np.array(nodop)
-    nodoa = np.array(nodoa)
-    f2 = nodoa - nodop
-    f1 = f2 @ T
-    f3 = f1 @ T @ T
-    v = []
-    for f in [f1, f2, f3]:
-        x, y = tuple(f + nodoa)
-        if 0 <= x < L and 0 <= y < C and Maze[x, y] == 1:
-            v.append((x, y))
-    return v
-
-def DFS(Maze, inicio=(0, 0), fin=(60, 80)):
-    frames = []
+from collections import deque
+from prob1 import MazeKruskals
 
 
-    nodo = inicio
-    nodop = (0, -1)
-    camino = [nodo]
-    rep = False
-    f = np.stack([Maze * 255] * 3, axis=-1).astype(np.uint8)
-    f[nodo] = [243, 255, 141]
-    frames.append(f.copy())
+def get_neighbors(maze, node):
+    L, C = maze.shape
+    x, y = node
+    for dx, dy in [(0,1),(1,0),(0,-1),(-1,0)]:
+        nx, ny = x+dx, y+dy
+        if 0 <= nx < L and 0 <= ny < C and maze[nx, ny] == 1:
+            yield (nx, ny)
+
+def bfs(maze, start, goal):
+    t0 = time.perf_counter()
+    queue = deque([start]); visited = {start}; parent = {}; nodes = 0
+    while queue:
+        curr = queue.popleft()
+        nodes += 1
+        if curr == goal: break
+        for nb in get_neighbors(maze, curr):
+            if nb not in visited:
+                visited.add(nb); parent[nb] = curr; queue.append(nb)
+    # reconstruir ruta
+    path, node = [], goal
+    while node != start:
+        path.append(node); node = parent[node]
+    path.append(start); path.reverse()
+    return {'nodes': nodes, 'length': len(path)-1, 'time': time.perf_counter() - t0}
+
+def dfs(maze, start, goal):
+    t0 = time.perf_counter()
+    stack = [start]; visited = set(); parent = {}; nodes = 0
+    while stack:
+        curr = stack.pop()
+        if curr in visited: continue
+        visited.add(curr); nodes += 1
+        if curr == goal: break
+        for nb in get_neighbors(maze, curr):
+            if nb not in visited:
+                parent[nb] = curr; stack.append(nb)
+    path, node = [], goal
+    while node != start:
+        path.append(node); node = parent[node]
+    path.append(start); path.reverse()
+    return {'nodes': nodes, 'length': len(path)-1, 'time': time.perf_counter() - t0}
+
+def ucs(maze, start, goal):
+    t0 = time.perf_counter()
+    heap = [(0, start)]; cost = {start:0}; parent = {}; visited = set(); nodes = 0
+    while heap:
+        c, curr = heapq.heappop(heap)
+        if curr in visited: continue
+        visited.add(curr); nodes += 1
+        if curr == goal: break
+        for nb in get_neighbors(maze, curr):
+            nc = c+1
+            if nb not in cost or nc < cost[nb]:
+                cost[nb] = nc; parent[nb] = curr
+                heapq.heappush(heap, (nc, nb))
+    path, node = [], goal
+    while node != start:
+        path.append(node); node = parent[node]
+    path.append(start); path.reverse()
+    return {'nodes': nodes, 'length': len(path)-1, 'time': time.perf_counter() - t0}
+
+def astar(maze, start, goal):
+    t0 = time.perf_counter()
+    def h(u,v): return abs(u[0]-v[0]) + abs(u[1]-v[1])
+    heap = [(h(start, goal), 0, start)]
+    cost = {start:0}; parent = {}; visited = set(); nodes = 0
+    while heap:
+        f, g, curr = heapq.heappop(heap)
+        if curr in visited: continue
+        visited.add(curr); nodes += 1
+        if curr == goal: break
+        for nb in get_neighbors(maze, curr):
+            ng = g+1
+            if nb not in cost or ng < cost[nb]:
+                cost[nb] = ng; parent[nb] = curr
+                heapq.heappush(heap, (ng + h(nb, goal), ng, nb))
+    path, node = [], goal
+    while node != start:
+        path.append(node); node = parent[node]
+    path.append(start); path.reverse()
+    return {'nodes': nodes, 'length': len(path)-1, 'time': time.perf_counter() - t0}
 
 
 
-    while nodo != fin:
-        f = frames[-1].copy()
+def run_experiments(K=25, M=45, N=55):
+    random.seed(1234)
+    algs = {'BFS': bfs, 'DFS': dfs, 'UCS': ucs, 'A*': astar}
+    records = []
 
-        posibles = visitables(Maze, nodo, nodop)
+    for i in range(1, K+1):
+        _, maze, _ = MazeKruskals(M, N, seed=random.randint(0,10**6))
+        # elegir start/goal con Manhattan >=10
+        while True:
+            u1, v1 = random.randrange(M), random.randrange(N)
+            u2, v2 = random.randrange(M), random.randrange(N)
+            if abs(u1-u2) + abs(v1-v2) >= 10:
+                start = (2*u1, 2*v1); goal = (2*u2, 2*v2)
+                break
 
-        if len(posibles) == 0:
-            # Retroceso (gris)
-            f[nodo] = [180, 180, 180]
-            nodo, nodop = nodop, nodo
-            f[nodo] = [180, 180, 180]
-            camino.pop(-1)
-            camino.pop(-1)
-            plt.imshow(f)
+        metrics = {name: func(maze, start, goal) for name, func in algs.items()}
+        order = sorted(algs, key=lambda n: metrics[n]['nodes'])
+        rank = {n: r+1 for r,n in enumerate(order)}
 
-            rep = True
-        else:
-            #camino dorado
-            nodo, nodop = posibles[0], nodo
-            if camino[-1] == nodo:
-                camino.pop(-1)
-                f[nodo] = [180, 180, 180]
-            else:
-                if rep:
-                    f[nodop] = [243, 255, 141] #[66, 254, 161] (verde)
-                    camino.append(nodop)
-                    rep = False
-                f[nodo] = [243, 255, 141] #[66, 254, 161]
-                camino.append(nodo)
-        frames.append(f)
+        rec = {'scenario': i, 'start': start, 'goal': goal}
+        for name in algs:
+            rec[f'{name}_nodes'] = metrics[name]['nodes']
+            rec[f'{name}_len']   = metrics[name]['length']
+            rec[f'{name}_time']  = metrics[name]['time']
+            rec[f'{name}_rank']  = rank[name]
+        records.append(rec)
+
+    df = pd.DataFrame(records)
+    df.to_csv('results_prob3.csv', index=False)
+    return df
+
+if __name__ == '__main__':
+
+    df = run_experiments()
 
 
-    return camino, frames
+    print(df.to_string(index=False))
 
-# ejemplo:
+    rank_cols = [c for c in df.columns if c.endswith('_rank')]
+    avg_ranks = df[rank_cols].mean().sort_values()
+    print("\n=== Ranking promedio (menor al mejor) ===")
+    print(avg_ranks.to_string())
 
-m, n = 30, 40
-_, M, _ = MazeKruskals(m, n, seed=313)
-camino, frames = DFS(M, inicio=(0, 0), fin=(2*m - 2, 2*n - 2))  # Fin = esquina opuesta
-
-# Mostrar último frame
-print(camino)
-plt.imshow(frames[-1])
-
-plt.show()
+    avg_nodes = df[['BFS_nodes','DFS_nodes','UCS_nodes','A*_nodes']].mean()
+    plt.figure()
+    avg_nodes.plot(kind='bar')
+    plt.title('Promedio de nodos explorados por algoritmo')
+    plt.xlabel('Algoritmo')
+    plt.ylabel('Nodos explorados promedio')
+    plt.tight_layout()
+    plt.show()
